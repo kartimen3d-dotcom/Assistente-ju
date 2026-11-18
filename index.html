@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1f30">
+<title>Assistente de voz — Força Municipal</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#0b1f30;color:#f4f7fa;display:grid;place-items:center;padding:22px}
+main{width:min(100%,520px);background:#10283a;border:1px solid #3b5365;border-radius:18px;padding:24px;box-shadow:0 18px 50px #0005}
+h1{font-size:1.35rem;margin:0 0 8px;color:#ffd21a}
+p{color:#b8c7d2;line-height:1.5}
+button{width:100%;border:0;border-radius:12px;padding:16px;margin-top:12px;font-size:1rem;font-weight:700;background:#ffd21a;color:#142536}
+button.secondary{background:#354e61;color:white}
+button:disabled{opacity:.55}
+#status{margin-top:16px;padding:12px;border-radius:10px;background:#0a1b29;color:#d7e2e9;white-space:pre-wrap;overflow-wrap:anywhere}
+#transcript{min-height:74px;padding:14px;background:#0a1b29;border:1px solid #354e61;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+small{display:block;margin-top:16px;color:#91a6b5;line-height:1.45}
+</style>
+</head>
+<body>
+<main>
+<h1>Assistente de voz</h1>
+<p>Esta página auxiliar captura sua fala fora do Google Apps Script e envia somente a transcrição para o painel que a abriu.</p>
+<div id="transcript">Aguardando comando…</div>
+<button id="start">🎙️ Iniciar microfone</button>
+<button id="stop" class="secondary" disabled>Parar</button>
+<div id="status">Pronto. Toque em “Iniciar microfone” e permita o acesso quando o Chrome perguntar.</div>
+<small>Não insira chaves de API ou senhas nesta página. A interpretação do comando continua sendo feita pelo painel.</small>
+</main>
+<script>
+(function(){
+const statusEl=document.getElementById("status"),transcriptEl=document.getElementById("transcript");
+const startBtn=document.getElementById("start"),stopBtn=document.getElementById("stop");
+const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null,finalText="";
+function status(message){statusEl.textContent=message;}
+function sendTranscript(text){
+ if(!window.opener||window.opener.closed){status("Transcrição capturada, mas esta página não foi aberta pelo painel. Feche esta guia e abra o microfone pelo botão do painel.");return;}
+ window.opener.postMessage({type:"FORCA_MUNICIPAL_VOICE_TRANSCRIPT",transcript:text},"*");
+ status("Comando enviado ao painel. Você já pode voltar à guia do painel.");
+}
+function start(){
+ if(!Recognition){status("Este Chrome não disponibilizou SpeechRecognition. Atualize o Chrome ou teste outro navegador compatível.");return;}
+ finalText="";transcriptEl.textContent="Ouvindo…";
+ try{
+  recognition=new Recognition();recognition.lang="pt-BR";recognition.continuous=false;recognition.interimResults=true;recognition.maxAlternatives=1;
+  recognition.onstart=function(){startBtn.disabled=true;stopBtn.disabled=false;status("Microfone ativo. Fale seu comando em português.");};
+  recognition.onresult=function(event){let interim="";for(let i=event.resultIndex;i<event.results.length;i++){const phrase=event.results[i][0].transcript||"";if(event.results[i].isFinal)finalText+=phrase+" ";else interim+=phrase;}transcriptEl.textContent=(finalText+interim).trim()||"Ouvindo…";};
+  recognition.onerror=function(event){startBtn.disabled=false;stopBtn.disabled=true;status("Falha no reconhecimento: "+(event.error||"erro desconhecido")+"\nHTTPS: "+(window.isSecureContext?"sim":"não")+"\nNavegador: "+navigator.userAgent);};
+  recognition.onend=function(){startBtn.disabled=false;stopBtn.disabled=true;const text=finalText.trim();if(text){transcriptEl.textContent=text;sendTranscript(text);}else if(!/Falha no reconhecimento/.test(statusEl.textContent)){status("A captura terminou sem transcrição. Tente novamente.");}};
+  recognition.start();
+ }catch(error){startBtn.disabled=false;stopBtn.disabled=true;status("Não foi possível iniciar: "+(error.name||"Erro")+" — "+(error.message||String(error)));}
+}
+startBtn.addEventListener("click",start);
+stopBtn.addEventListener("click",function(){try{if(recognition)recognition.stop();}catch(e){}});
+if(!window.opener)status("Esta página foi aberta diretamente. Para enviar comandos, abra-a pelo botão de microfone do painel.");
+})();
+</script>
+</body>
+</html>
